@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 1rem;
+            text-align: center;
+        }
+        #chat-container {
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            margin: 2rem auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        #messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            height: 400px;
+        }
+        .message {
+            margin-bottom: 1rem;
+        }
+        .user {
+            text-align: right;
+        }
+        .bot {
+            text-align: left;
+        }
+        #input-area {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid #ccc;
+        }
+        #user-input {
+            flex: 1;
+            padding: 0.5rem;
+            font-size: 1rem;
+        }
+        #send-btn, #upload-btn, #model-select {
+            margin-left: 0.5rem;
+        }
+        #model-select {
+            padding: 0.5rem;
+        }
+        #multimedia-preview {
+            max-width: 100%;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Web-based Chat Assistant</h1>
+        <select id="model-select">
+            <option value="model1">Model 1</option>
+            <option value="model2">Model 2</option>
+            <!-- Add more models as needed -->
+        </select>
+    </header>
+    <div id="chat-container">
+        <div id="messages"></div>
+        <div id="input-area">
+            <input type="text" id="user-input" placeholder="Type your message..." />
+            <button id="send-btn">Send</button>
+            <input type="file" id="upload-input" accept="image/*,video/*" style="display:none" />
+            <button id="upload-btn">Upload Media</button>
+        </div>
+        <div id="multimedia-preview"></div>
+    </div>
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const uploadBtn = document.getElementById('upload-btn');
+        const uploadInput = document.getElementById('upload-input');
+        const multimediaPreview = document.getElementById('multimedia-preview');
+        const modelSelect = document.getElementById('model-select');
+
+        /**
+         * Append a message to the chat window.
+         * @param {string} text - The message text.
+         * @param {string} sender - 'user' or 'bot'.
+         */
+        function appendMessage(text, sender) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ' + sender;
+            msgDiv.innerHTML = text;
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        /**
+         * Send user message to backend API and display response.
+         */
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            appendMessage(message, 'user');
+            userInput.value = '';
+
+            const selectedModel = modelSelect.value;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        model: selectedModel
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.status}`);
+                }
+                const data = await response.json();
+                appendMessage(data.reply, 'bot');
+            } catch (error) {
+                appendMessage(`Error: ${error.message}`, 'bot');
+            }
+        }
+
+        /**
+         * Handle media upload.
+         */
+        async function handleMediaUpload() {
+            uploadInput.click();
+        }
+
+        /**
+         * Process uploaded media and send to backend.
+         */
+        uploadInput.addEventListener('change', async () => {
+            const file = uploadInput.files[0];
+            if (!file) return;
+
+            // Show preview
+            multimediaPreview.innerHTML = '';
+            const reader = new FileReader();
+            reader.onload = () => {
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = reader.result;
+                    img.id = 'multimedia-preview';
+                    multimediaPreview.appendChild(img);
+                } else if (file.type.startsWith('video/')) {
+                    const video = document.createElement('video');
+                    video.src = reader.result;
+                    video.controls = true;
+                    video.id = 'multimedia-preview';
+                    multimediaPreview.appendChild(video);
+                }
+            };
+            reader.readAsDataURL(file);
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('model', modelSelect.value);
+
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.status}`);
+                }
+                const data = await response.json();
+                appendMessage(`Media received. Response: ${data.reply}`, 'bot');
+            } catch (error) {
+                appendMessage(`Error uploading media: ${error.message}`, 'bot');
+            }
+        });
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        uploadBtn.addEventListener('click', handleMediaUpload);
+    </script>
+</body>
+</html>
